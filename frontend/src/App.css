@@ -212,3 +212,30 @@ nav a:hover {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Tombol otentikasi */
+.auth-button {
+  background-color: #61dafb;
+  color: #282c34;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-weight: bold;
+  text-decoration: none;
+  margin-left: 15px;
+  cursor: pointer;
+}
+.auth-button:hover {
+  background-color: #21a1f1;
+}
+
+/* Pesan error di form login */
+.message-error {
+  text-align: center;
+  margin-top: 15px;
+  padding: 10px;
+  border-radius: 4px;
+  font-weight: bold;
+  background-color: #f8d7da;
+  color: #721c24;
+}

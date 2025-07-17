@@ -1,14 +1,17 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import * as Ably from 'ably';
-// PERUBAHAN: Impor 'useAbly' sebagai ganti 'useChannel'
+// PERUBAHAN: Impor 'useAbly' yang lebih stabil
 import { AblyProvider, useAbly } from 'ably/react';
+// Impor instance Axios yang sudah dikonfigurasi
+import apiClient from '../api/axiosConfig'; 
 
 // =======================================================
 //           API KEY ANDA SUDAH SAYA MASUKKAN
 // =======================================================
 const ablyClient = new Ably.Realtime({ key: '68titg.tZBMiA:XIcq8Lp1Pl0MSFyBwSlqEwHyjgf8nVaetYRwMP5nx_Q' });
 // =======================================================
+
 
 // Komponen untuk tombol aksi (TIDAK ADA PERUBAHAN)
 const AksiLaporan = ({ laporan }) => {
@@ -17,12 +20,17 @@ const AksiLaporan = ({ laporan }) => {
   const handleStatusChange = async (newStatus) => {
     setIsLoading(true);
     try {
-      await axios.put(`http://localhost:5000/api/laporan/${laporan.id}/status`, {
+      // Menggunakan apiClient yang sudah ada tokennya
+      await apiClient.put(`/laporan/${laporan.id}/status`, {
         status: newStatus,
       });
     } catch (error) {
       console.error('Gagal mengubah status:', error);
-      alert('Gagal mengubah status laporan.');
+      if (error.response && error.response.status === 401) {
+        alert('Sesi Anda telah berakhir. Silakan login kembali.');
+      } else {
+        alert('Gagal mengubah status laporan.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -46,15 +54,20 @@ const AksiLaporan = ({ laporan }) => {
   );
 };
 
-// Komponen yang menampilkan tabel (LOGIKA BARU DAN LEBIH STABIL)
+
+// Komponen yang menampilkan tabel (LOGIKA BARU YANG LEBIH STABIL)
 const LaporanListContent = () => {
   const [laporan, setLaporan] = useState([]);
-  // PERUBAHAN: Gunakan hook 'useAbly' untuk mendapatkan akses ke client Ably
+  // Gunakan hook 'useAbly' untuk mendapatkan akses ke client Ably
   const client = useAbly();
 
   // Gunakan useEffect untuk mengelola koneksi dan langganan secara manual
   useEffect(() => {
-    // Ambil channel yang kita inginkan
+    // Pastikan client sudah siap sebelum digunakan
+    if (!client) {
+      return;
+    }
+
     const channel = client.channels.get('laporan-channel');
 
     const onLaporanBaru = (message) => {
@@ -78,7 +91,7 @@ const LaporanListContent = () => {
     // Ambil data awal dari database
     const fetchLaporan = async () => {
       try {
-        const response = await axios.get('http://localhost:5000/api/laporan');
+        const response = await apiClient.get('/laporan');
         setLaporan(response.data);
       } catch (error) {
         console.error('Gagal mengambil data laporan:', error);
