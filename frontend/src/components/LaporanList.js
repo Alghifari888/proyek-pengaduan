@@ -1,12 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import * as Ably from 'ably';
-import { AblyProvider, useChannel } from 'ably/react';
+// PERUBAHAN: Impor 'useAbly' sebagai ganti 'useChannel'
+import { AblyProvider, useAbly } from 'ably/react';
 
-const ablyClient = new Ably.Realtime({ key: 'YOUR_SUBSCRIBE_ONLY_API_KEY' });
+// =======================================================
+//           API KEY ANDA SUDAH SAYA MASUKKAN
+// =======================================================
+const ablyClient = new Ably.Realtime({ key: '68titg.tZBMiA:XIcq8Lp1Pl0MSFyBwSlqEwHyjgf8nVaetYRwMP5nx_Q' });
+// =======================================================
 
-// Komponen untuk satu baris aksi (tombol)
-const AksiLaporan = ({ laporan, onStatusChange }) => {
+// Komponen untuk tombol aksi (TIDAK ADA PERUBAHAN)
+const AksiLaporan = ({ laporan }) => {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleStatusChange = async (newStatus) => {
@@ -15,7 +20,6 @@ const AksiLaporan = ({ laporan, onStatusChange }) => {
       await axios.put(`http://localhost:5000/api/laporan/${laporan.id}/status`, {
         status: newStatus,
       });
-      // Kita tidak perlu update state di sini, karena Ably akan melakukannya
     } catch (error) {
       console.error('Gagal mengubah status:', error);
       alert('Gagal mengubah status laporan.');
@@ -42,33 +46,36 @@ const AksiLaporan = ({ laporan, onStatusChange }) => {
   );
 };
 
-
-// Komponen utama yang menampilkan daftar
+// Komponen yang menampilkan tabel (LOGIKA BARU DAN LEBIH STABIL)
 const LaporanListContent = () => {
   const [laporan, setLaporan] = useState([]);
+  // PERUBAHAN: Gunakan hook 'useAbly' untuk mendapatkan akses ke client Ably
+  const client = useAbly();
 
-  // Fungsi untuk memperbarui satu laporan di dalam state
-  const updateLaporanState = (laporanDiperbarui) => {
-    setLaporan((prevLaporan) =>
-      prevLaporan.map((item) =>
-        item.id === laporanDiperbarui.id ? laporanDiperbarui : item
-      )
-    );
-  };
-
-  // Mendengarkan event 'laporan-baru'
-  useChannel('laporan-channel', 'laporan-baru', (message) => {
-    console.log('Laporan baru diterima:', message.data);
-    setLaporan((prevLaporan) => [message.data, ...prevLaporan]);
-  });
-
-  // Mendengarkan event 'laporan-diperbarui'
-  useChannel('laporan-channel', 'laporan-diperbarui', (message) => {
-    console.log('Laporan diperbarui:', message.data);
-    updateLaporanState(message.data);
-  });
-
+  // Gunakan useEffect untuk mengelola koneksi dan langganan secara manual
   useEffect(() => {
+    // Ambil channel yang kita inginkan
+    const channel = client.channels.get('laporan-channel');
+
+    const onLaporanBaru = (message) => {
+      console.log('Ably: Menerima laporan-baru', message.data);
+      setLaporan((prevLaporan) => [message.data, ...prevLaporan]);
+    };
+
+    const onLaporanDiperbarui = (message) => {
+      console.log('Ably: Menerima laporan-diperbarui', message.data);
+      setLaporan((prevLaporan) =>
+        prevLaporan.map((item) =>
+          item.id === message.data.id ? message.data : item
+        )
+      );
+    };
+
+    // Berlangganan ke kedua event
+    channel.subscribe('laporan-baru', onLaporanBaru);
+    channel.subscribe('laporan-diperbarui', onLaporanDiperbarui);
+
+    // Ambil data awal dari database
     const fetchLaporan = async () => {
       try {
         const response = await axios.get('http://localhost:5000/api/laporan');
@@ -78,22 +85,24 @@ const LaporanListContent = () => {
       }
     };
     fetchLaporan();
-  }, []);
 
+    // Fungsi cleanup: Berhenti berlangganan saat komponen hilang
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [client]); // Jalankan efek ini hanya jika client berubah
+
+  // Sisa dari komponen ini sama seperti sebelumnya
   const formatDate = (dateString) => {
     const options = { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
     return new Date(dateString).toLocaleDateString('id-ID', options);
   };
 
-  // Fungsi untuk memberikan kelas CSS berdasarkan status
   const getStatusClass = (status) => {
     switch (status) {
-      case 'Dikerjakan':
-        return 'status-dikerjakan';
-      case 'Selesai':
-        return 'status-selesai';
-      default:
-        return 'status-terkirim';
+      case 'Dikerjakan': return 'status-dikerjakan';
+      case 'Selesai': return 'status-selesai';
+      default: return 'status-terkirim';
     }
   };
 
@@ -118,14 +127,8 @@ const LaporanListContent = () => {
                 <td>{formatDate(item.tanggal_laporan)}</td>
                 <td>{item.nama_pelapor}</td>
                 <td>{item.isi_laporan}</td>
-                <td>
-                  <span className={`status ${getStatusClass(item.status)}`}>
-                    {item.status}
-                  </span>
-                </td>
-                <td>
-                  <AksiLaporan laporan={item} />
-                </td>
+                <td><span className={`status ${getStatusClass(item.status)}`}>{item.status}</span></td>
+                <td><AksiLaporan laporan={item} /></td>
               </tr>
             ))}
           </tbody>
@@ -135,7 +138,7 @@ const LaporanListContent = () => {
   );
 };
 
-// Komponen pembungkus AblyProvider
+// Komponen pembungkus utama (TIDAK ADA PERUBAHAN)
 const LaporanList = () => (
   <AblyProvider client={ablyClient}>
     <LaporanListContent />
